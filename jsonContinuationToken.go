@@ -8,29 +8,29 @@ import (
         "net/http"
         "time"
         "crypto/tls"
-//        "strings"
+        "strings"
 )
-
-type contToken struct {
-        Token string `json:"continuationToken,omitempty"`
+type Items struct {
+        ID string `json:"id"`
+        Name string `json:"name"`
+        Version string `json:"version"`	
 }
 
-func getUrl(url string, uri string, contToken1 contToken) *http.Request {
+type baseImage struct {
+        Items []Items `json:"items"` 
+	Token json.RawMessage `json:"continuationToken"`
+}
+
+func getUrl(url string, uri string, tokenString string) *http.Request {
 
 	var fullUrl string
-
-        if contToken1.Token != "" {
-	  //USED FOR DEBUG!
-          fmt.Printf("\nUsing TOKEN in fullUrl\n")
+        if tokenString != "" {
           tok := "continuationToken=%s"
-          fullUrl = fmt.Sprintf(url + tok, contToken1.Token +"&"+ uri)
+          fullUrl = fmt.Sprintf(url + tok, tokenString +"&"+ uri)
 	} else {
-	    //USED FOR DEBUG!
-            fmt.Printf("\nNOT USING TOKEN in fullUrl\n")
 	    fullUrl = fmt.Sprintf(url + uri)
           }
-        //USED FOR DEBUG!!
-        fmt.Printf("\n%s\n", fullUrl) 
+
         req, err := http.NewRequest(http.MethodGet, fullUrl, nil)
         if err != nil {
                 log.Fatal(err)
@@ -44,8 +44,6 @@ func checkBody(res *http.Response) []byte {
         if readErr != nil {
                 log.Fatal(readErr)
         }
-        //USED FOR DEBUG!!
-	//fmt.Println(string(body))
         return body
 
 }
@@ -53,10 +51,11 @@ func checkBody(res *http.Response) []byte {
 func main() {
 
 	// Set variables
-        contTokens := ""
-        contToken1 := contToken{}
+        var contTokens string
+        contToken := baseImage{}
         url := "https://registry.lappy.maddocks:8443/service/rest/v1/components?"
         uri := "repository=public"
+
         // Define the http transport options
         tr := &http.Transport{
                 TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -69,23 +68,31 @@ func main() {
         }
 
 	// Check if continuation Token is received (process accordingly!)
-        fmt.Println(contToken1.Token)
-	//for strings.Contains(contToken1.Token, "null") {
-	for contToken1.Token != "null" { 
-          //USED FOR DEBUG!!
-	  fmt.Println("within for loop, contToken1 = ", contToken1.Token)
-          req, getErr := baseClient.Do(getUrl(url, uri, contToken1))
+	for string(contToken.Token) != "null" { 
+
+          tokenString1 := string(contToken.Token)
+          tokenString := strings.Trim(tokenString1, `"`)
+
+          req, getErr := baseClient.Do(getUrl(url, uri, tokenString))
           if getErr != nil {
                  log.Fatal(getErr)
           }
+
           body := checkBody(req)
-	  contToken1.Token = "null"
-          jsonErr := json.Unmarshal(body, &contToken1)
+	  //fmt.Println(string(body))
+          jsonErr := json.Unmarshal(body, &contToken)
           if jsonErr != nil {
                   log.Fatal(jsonErr)
           }
-          contTokens += contToken1.Token
+
+
+	  if tokenString != "null" {
+            contTokens += tokenString+"\n"
+	    //fmt.Println(contToken.Items, string(contToken.Token))
+	    fmt.Println(contToken.Items)
+	  }
 	} 
+
 	// Print output
         fmt.Println(contTokens)
 }
